@@ -1,3 +1,6 @@
+"use client";
+
+import { useI18n } from "@/lib/i18n/context";
 import React from "react";
 import KapitaLogo from "./KapitaLogo";
 
@@ -6,6 +9,7 @@ interface Props {
 }
 
 export default function AuthPageLayout({ children }: Props) {
+  const { t } = useI18n();
   return (
     <div className="min-h-screen flex bg-[#0b1326]">
       {/* ── Left hero panel — desktop only ── */}
@@ -38,7 +42,7 @@ export default function AuthPageLayout({ children }: Props) {
             <div className="inline-flex items-center gap-2 border border-[#f97316]/50 rounded-full px-3 py-1 mb-8">
               <span className="w-1.5 h-1.5 rounded-full bg-[#f97316] inline-block" />
               <span className="text-[#f97316] text-[11px] tracking-[0.15em] font-semibold">
-                LIVE TRADING FLOOR
+                {t.hero.badge}
               </span>
             </div>
 
@@ -46,19 +50,18 @@ export default function AuthPageLayout({ children }: Props) {
               className="font-extrabold leading-[1.1] mb-6"
               style={{ fontSize: "clamp(2rem, 3.5vw, 3.2rem)" }}
             >
-              <span className="text-white">Climb the </span>
-              <span className="text-[#f97316]">leaderboard.</span>
+              <span className="text-white">{t.hero.h1} </span>
+              <span className="text-[#f97316]">{t.hero.h2}</span>
               <br />
-              <span className="text-white">Conquer the </span>
-              <span className="text-[#f97316]">market.</span>
+              <span className="text-white">{t.hero.h3} </span>
+              <span className="text-[#f97316]">{t.hero.h4}</span>
             </h2>
 
             <p
               className="leading-relaxed max-w-[340px]"
               style={{ color: "rgba(255,255,255,0.65)" }}
             >
-              The ultimate high-stakes investment simulator. Master the markets,
-              climb the global rankings, and prove your strategy with zero risk.
+              {t.hero.subtitle}
             </p>
           </div>
         </div>

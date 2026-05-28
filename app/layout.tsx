@@ -1,3 +1,4 @@
+import { I18nProvider } from "@/lib/i18n/context";
 import type { Metadata } from "next";
 import { Sora } from "next/font/google";
 import "./globals.css";
@@ -24,7 +25,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={sora.variable}>
-      <body className="bg-[#0b1326] text-white antialiased">{children}</body>
+      <body className="bg-[#0b1326] text-white antialiased">
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }
