@@ -1,8 +1,9 @@
 "use client";
 
+import { authLog } from "@/lib/auth-debug";
 import { useI18n } from "@/lib/i18n/context";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EyeIcon, EyeOffIcon } from "./icons";
 import KapitaLogo from "./KapitaLogo";
 
@@ -58,8 +59,23 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    authLog("LoginForm", "mount", {
+      origin: window.location.origin,
+      search: window.location.search,
+      hasToken: !!localStorage.getItem("kapita-token"),
+    });
+  }, []);
+
   const oauthLogin = (provider: string) => {
-    window.location.href = `/api/auth/${provider}`;
+    const url = `/api/auth/${provider}`;
+    authLog("LoginForm", "OAuth start", {
+      provider,
+      url,
+      origin: window.location.origin,
+      AUTH_BASE,
+    });
+    window.location.assign(url);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

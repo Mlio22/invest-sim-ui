@@ -1,5 +1,6 @@
 "use client";
 
+import { authLog } from "@/lib/auth-debug";
 import { useI18n } from "@/lib/i18n/context";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -36,11 +37,24 @@ export default function AuthCallbackPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    // Check for explicit OAuth error
     const params = new URLSearchParams(window.location.search);
+    const queryKeys = Array.from(params.keys());
+
+    authLog("Callback", "processing", {
+      href: window.location.href,
+      origin: window.location.origin,
+      queryKeys,
+      hasHash: window.location.hash.length > 0,
+    });
+
+    // Check for explicit OAuth error
     const oauthError = params.get("error");
     if (oauthError) {
       const desc = params.get("error_description") ?? oauthError;
+      authLog("Callback", "OAuth error from provider", {
+        error: oauthError,
+        description: desc,
+      });
       setErrorMsg(desc);
       setStatus("error");
       return;
@@ -48,10 +62,17 @@ export default function AuthCallbackPage() {
 
     const token = extractToken();
 
+    authLog("Callback", "token extraction", {
+      found: !!token,
+      tokenLength: token?.length ?? 0,
+    });
+
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
+      authLog("Callback", "token saved, navigating to /dashboard");
       router.replace("/dashboard");
     } else {
+      authLog("Callback", "no token in URL — showing error");
       setStatus("error");
       setErrorMsg(t.callback.error);
     }

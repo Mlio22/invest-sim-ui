@@ -2,7 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+
+import AppLayout from '@/components/layout/AppLayout';
+import { authLog } from '@/lib/auth-debug';
+import { formatDate, formatIDR, formatPct, pnlColor } from '@/lib/format';
+import type { DashboardData, MoverItem, PerformancePoint } from '@/lib/mockData';
+import { MOCK_DASHBOARD, MOCK_PERFORMANCE } from '@/lib/mockData';
 
 const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ssr: false,
@@ -13,78 +20,9 @@ const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ),
 });
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
 
-// shopspring/decimal serializes as a JSON string, e.g. "1.54"
-type Decimal = string;
 
-interface PortfolioSummary {
-  total_value: Decimal;
-  cash_balance: Decimal;
-  invested_value: Decimal;
-  total_pnl: Decimal;
-  total_pnl_pct: Decimal;
-  today_pnl: Decimal;
-  today_pnl_pct: Decimal;
-}
-
-interface Holding {
-  symbol: string;
-  name: string;
-  sector: string;
-  quantity: number;
-  avg_buy_price: Decimal;
-  current_price: Decimal;
-  market_value: Decimal;
-  unrealized_pnl: Decimal;
-  unrealized_pnl_pct: Decimal;
-  day_change: Decimal;
-  day_change_pct: Decimal;
-}
-
-interface WatchlistItem {
-  id: string;
-  symbol: string;
-  name: string;
-  sector: string;
-  price: Decimal;
-  change: Decimal;
-  change_pct: Decimal;
-  note?: string;
-}
-
-interface MoverItem {
-  symbol: string;
-  name: string;
-  sector: string;
-  price: Decimal;
-  change: Decimal;
-  change_pct: Decimal;
-}
-
-interface DashboardData {
-  portfolio: PortfolioSummary;
-  holdings: Holding[];
-  watchlist: WatchlistItem[];
-  movers: { gainers: MoverItem[]; losers: MoverItem[] };
-  recent_transactions: Array<{
-    id: string;
-    symbol: string;
-    transaction_type: 'BUY' | 'SELL';
-    quantity: number;
-    price: Decimal;
-    total_amount: Decimal;
-    status: string;
-    created_at: string;
-  }>;
-}
-
-interface PerformancePoint {
-  date: string;
-  value: number;
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -93,192 +31,6 @@ function getToken(): string | null {
   return localStorage.getItem('kapita-token');
 }
 
-function decodeEmail(token: string): string {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.email || payload.sub || 'User';
-  } catch {
-    return 'User';
-  }
-}
-
-// Converts a shopspring/decimal string (or plain number) to a JS number.
-function toNum(v: Decimal | number): number {
-  if (typeof v === 'number') return v;
-  const n = parseFloat(v);
-  return isNaN(n) ? 0 : n;
-}
-
-function formatIDR(value: Decimal | number, compact = false): string {
-  const n = toNum(value);
-  if (compact) {
-    const abs = Math.abs(n);
-    if (abs >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}B`;
-    if (abs >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000) return `Rp ${(n / 1_000).toFixed(0)}K`;
-    return `Rp ${n.toFixed(0)}`;
-  }
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
-function formatPct(value: Decimal | number): string {
-  const n = toNum(value);
-  const sign = n >= 0 ? '+' : '';
-  return `${sign}${n.toFixed(2)}%`;
-}
-
-function pnlColor(value: Decimal | number): string {
-  const n = toNum(value);
-  if (n > 0) return 'text-green-400';
-  if (n < 0) return 'text-red-400';
-  return 'text-[#94a3b8]';
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-// ─── Icons ─────────────────────────────────────────────────────────────────────
-
-function IconPortfolio({ active }: { active?: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#f97316' : 'currentColor'} strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="15" rx="2" />
-      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-    </svg>
-  );
-}
-
-function IconMarkets({ active }: { active?: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#f97316' : 'currentColor'} strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-      <polyline points="17 6 23 6 23 12" />
-    </svg>
-  );
-}
-
-function IconWallet({ active }: { active?: boolean }) {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#f97316' : 'currentColor'} strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
-      <path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z" />
-      <circle cx="17" cy="13" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconBell() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  );
-}
-
-function IconLogout() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-// ─── Sidebar ───────────────────────────────────────────────────────────────────
-
-function NavItem({ icon, label, active }: { icon: React.ReactNode; label: string; active?: boolean }) {
-  return (
-    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
-      active ? 'bg-[#f97316]/10 text-[#f97316]' : 'text-[#94a3b8] hover:bg-[#1e2d4a] hover:text-white'
-    }`}>
-      {icon}
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function Sidebar({ email, onLogout }: { email: string; onLogout: () => void }) {
-  const initial = email.charAt(0).toUpperCase();
-  return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 bg-[#0d1829] border-r border-[#1e2d4a] min-h-screen px-4 py-6">
-      <div className="flex items-center gap-2.5 mb-10">
-        <div className="w-9 h-9 bg-[#f97316] rounded-lg flex items-center justify-center shrink-0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white"
-            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-            <polyline points="17 6 23 6 23 12" />
-          </svg>
-        </div>
-        <span className="text-[#f97316] font-bold text-lg tracking-[0.2em]">KAPITA</span>
-      </div>
-
-      <nav className="flex-1 space-y-1">
-        <NavItem icon={<IconPortfolio active />} label="Portfolio" active />
-        <NavItem icon={<IconMarkets />} label="Markets" />
-        <NavItem icon={<IconWallet />} label="Wallet" />
-      </nav>
-
-      <div className="space-y-1 mt-4">
-        <div className="flex items-center gap-3 px-3 py-2 text-[#94a3b8] text-sm">
-          <div className="w-7 h-7 rounded-full bg-[#1e2d4a] flex items-center justify-center text-xs font-semibold text-white">
-            {initial}
-          </div>
-          <span className="truncate flex-1">{email}</span>
-        </div>
-        <button
-          onClick={onLogout}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-[#94a3b8] hover:bg-[#1e2d4a] hover:text-red-400 transition-colors text-sm"
-        >
-          <IconLogout />
-          <span>Log out</span>
-        </button>
-      </div>
-    </aside>
-  );
-}
-
-// ─── Mobile Bottom Nav ─────────────────────────────────────────────────────────
-
-function MobileNav() {
-  return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0d1829] border-t border-[#1e2d4a] flex z-50">
-      {[
-        { icon: <IconPortfolio active />, label: 'Portfolio', active: true },
-        { icon: <IconMarkets />, label: 'Markets' },
-        { icon: <IconWallet />, label: 'Wallet' },
-      ].map(({ icon, label, active }) => (
-        <button key={label} className={`flex-1 flex flex-col items-center gap-1 py-3 text-[10px] transition-colors ${
-          active ? 'text-[#f97316]' : 'text-[#4a5c70]'
-        }`}>
-          {icon}
-          <span>{label}</span>
-        </button>
-      ))}
-    </nav>
-  );
-}
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────────
 
@@ -297,7 +49,7 @@ function StatCard({ label, value, sub, subColor }: {
   );
 }
 
-function SectionHeader({ title, right }: { title: string; right?: React.ReactNode }) {
+function SectionHeader({ title, right }: { title: string; right?: ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-3">
       <h2 className="text-white font-semibold text-sm">{title}</h2>
@@ -328,13 +80,11 @@ type Range = typeof RANGES[number];
 
 export default function DashboardContent() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
   const [data, setData] = useState<DashboardData | null>(null);
   const [perfData, setPerfData] = useState<PerformancePoint[]>([]);
   const [range, setRange] = useState<Range>('1M');
   const [loading, setLoading] = useState(true);
   const [perfLoading, setPerfLoading] = useState(true);
-  const [error, setError] = useState('');
 
   const logout = useCallback(() => {
     localStorage.removeItem('kapita-token');
@@ -343,19 +93,37 @@ export default function DashboardContent() {
 
   useEffect(() => {
     const token = getToken();
-    if (!token) { router.push('/login'); return; }
-    setEmail(decodeEmail(token));
+    authLog('Dashboard', 'auth check', {
+      hasToken: !!token,
+      origin: window.location.origin,
+      API_URL,
+    });
+    if (!token) {
+      authLog('Dashboard', 'no token — redirecting to /login');
+      router.push('/login');
+      return;
+    }
 
     fetch(`${API_URL}/api/v1/dashboard`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => {
-        if (r.status === 401) { logout(); return null; }
+        if (r.status === 401) {
+          authLog('Dashboard', 'API returned 401 — logging out');
+          logout();
+          return null;
+        }
         if (!r.ok) throw new Error('Failed to load dashboard');
         return r.json();
       })
-      .then((json) => { if (json) setData(json.data as DashboardData); })
-      .catch((e) => setError(e.message))
+      .then((json) => {
+        if (json?.data) {
+          setData(json.data as DashboardData);
+        } else {
+          setData(MOCK_DASHBOARD);
+        }
+      })
+      .catch(() => setData(MOCK_DASHBOARD))
       .finally(() => setLoading(false));
   }, [router, logout]);
 
@@ -366,17 +134,19 @@ export default function DashboardContent() {
     fetch(`${API_URL}/api/v1/portfolio/performance?range=${range}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
-        if (json?.data?.points) {
+        if (json?.data?.points?.length) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setPerfData(json.data.points.map((p: any) => ({
             date: p.date,
             value: parseFloat(p.value),
           })));
+        } else {
+          setPerfData(MOCK_PERFORMANCE[range] ?? MOCK_PERFORMANCE['1M']);
         }
       })
-      .catch(() => {})
+      .catch(() => setPerfData(MOCK_PERFORMANCE[range] ?? MOCK_PERFORMANCE['1M']))
       .finally(() => setPerfLoading(false));
   }, [range]);
 
@@ -391,45 +161,11 @@ export default function DashboardContent() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#0b1326] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-400 mb-4">{error}</p>
-          <button onClick={logout} className="text-[#f97316] text-sm underline">Log out</button>
-        </div>
-      </div>
-    );
-  }
-
   const p = data?.portfolio;
 
   return (
-    <div className="min-h-screen bg-[#0b1326] flex">
-      <Sidebar email={email} onLogout={logout} />
-
-      <div className="flex-1 flex flex-col">
-        {/* Mobile Top Bar */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#0b1326] border-b border-[#1e2d4a]">
-          <div className="w-8 h-8 rounded-full bg-[#1e2d4a] flex items-center justify-center text-white text-xs font-semibold">
-            {email.charAt(0).toUpperCase()}
-          </div>
-          <span className="text-[#f97316] font-bold tracking-[0.2em] text-base">KAPITA</span>
-          <button className="text-[#4a5c70]"><IconBell /></button>
-        </header>
-
-        {/* Desktop Top Bar */}
-        <header className="hidden md:flex items-center justify-between px-6 py-4 border-b border-[#1e2d4a]">
-          <h1 className="text-white font-bold text-xl">Portfolio</h1>
-          <div className="flex items-center gap-3">
-            <button className="text-[#4a5c70] hover:text-white transition-colors"><IconBell /></button>
-            <div className="w-8 h-8 rounded-full bg-[#1e2d4a] flex items-center justify-center text-white text-xs font-semibold">
-              {email.charAt(0).toUpperCase()}
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-20 md:pb-6">
+    <AppLayout activePage="portfolio">
+      <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 pb-24 md:pb-6">
           {/* Hero Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <StatCard
@@ -588,11 +324,8 @@ export default function DashboardContent() {
               </div>
             </div>
           ) : null}
-        </main>
-      </div>
-
-      <MobileNav />
-    </div>
+      </main>
+    </AppLayout>
   );
 }
 
