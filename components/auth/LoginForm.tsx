@@ -1,13 +1,12 @@
 "use client";
 
 import { authLog } from "@/lib/auth-debug";
+import { AUTH_BASE, buildOAuthLoginUrl } from "@/lib/oauth";
 import { useI18n } from "@/lib/i18n/context";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EyeIcon, EyeOffIcon } from "./icons";
 import KapitaLogo from "./KapitaLogo";
-
-const AUTH_BASE = process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8888";
 
 // ── OAuth provider icons ──────────────────────────────────────────────────────
 
@@ -68,7 +67,7 @@ export default function LoginForm() {
   }, []);
 
   const oauthLogin = (provider: string) => {
-    const url = `/api/auth/${provider}`;
+    const url = buildOAuthLoginUrl(provider, window.location.origin);
     authLog("LoginForm", "OAuth start", {
       provider,
       url,

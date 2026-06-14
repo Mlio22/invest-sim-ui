@@ -1,5 +1,6 @@
 "use client";
 
+import { buildOAuthLoginUrl } from "@/lib/oauth";
 import { useI18n } from "@/lib/i18n/context";
 import Link from "next/link";
 import { useState } from "react";
@@ -59,7 +60,7 @@ export default function RegisterForm() {
   const [error, setError] = useState("");
 
   const oauthLogin = (provider: string) => {
-    window.location.href = `/api/auth/${provider}`;
+    window.location.assign(buildOAuthLoginUrl(provider, window.location.origin));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
